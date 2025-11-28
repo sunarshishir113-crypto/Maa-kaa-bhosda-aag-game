@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Fire Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #gameCanvas {
+            border: 3px solid #ff6b00;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(255, 107, 0, 0.5);
+            background: #0d0d0d;
+        }
+
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 48px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255, 107, 0, 0.8);
+            z-index: 10;
+        }
+
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 40px;
+            border-radius: 20px;
+            border: 3px solid #ff6b00;
+        }
+
+        #startScreen h1, #gameOverScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255, 107, 0, 0.8);
+        }
+
+        #startScreen p {
+            font-size: 20px;
+            margin-bottom: 30px;
+            color: #ccc;
+        }
+
+        button {
+            background: linear-gradient(135deg, #ff6b00 0%, #ff4400 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(255, 107, 0, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 107, 0, 0.6);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        #collisionOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.9) 100%);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+            animation: fireFlicker 0.1s infinite;
+        }
+
+        @keyframes fireFlicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+
+        #collisionText {
+            font-size: 72px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 30px rgba(255, 0, 0, 1);
+            margin-bottom: 30px;
+            animation: textPulse 0.5s ease-in-out;
+        }
+
+        @keyframes textPulse {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        #collisionImage {
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            border: 5px solid #ff0000;
+            box-shadow: 0 0 50px rgba(255, 0, 0, 0.8);
+            animation: zoomOut 1s ease-out;
+        }
+
+        @keyframes zoomOut {
+            0% { transform: scale(3); opacity: 0; }
+            50% { transform: scale(1.5); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">0</div>
+        
+        <div id="startScreen">
+            <h1>🔥 Flappy Fire 🔥</h1>
+            <p>Click or press SPACE to flap<br>Avoid the flames!</p>
+            <button id="startBtn">Start Game</button>
+        </div>
+
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+        <div id="gameOverScreen" class="hidden">
+            <h1>Game Over!</h1>
+            <p id="finalScore">Score: 0</p>
+            <button id="restartBtn">Restart</button>
+        </div>
+
+        <div id="collisionOverlay">
+            <div id="collisionText">Maa kaa bhosda AAGGG</div>
+            <img id="collisionImage" src="" alt="Explosion">
+        </div>
+    </div>
+
+    <script>
+        // Canvas Setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game State
+        let gameState = 'start'; // 'start', 'playing', 'gameOver', 'collision'
+        let score = 0;
+        let animationId;
+
+        // Player Object
+        const player = {
+            x: 100,
+            y: canvas.height / 2,
+            radius: 25,
+            velocity: 0,
+            gravity: 0.5,
+            jump: -10,
+            image: new Image()
+        };
+
+        // Load player image from assets instead of creating a circle
+const createPlaceholderImage = () => {
+    return "assets/player.gif";
+};
+
+// Apply image to player
+player.image.src = createPlaceholderImage();
+
+
+        // Obstacles Array
+        let obstacles = [];
+        const obstacleWidth = 50;
+        const obstacleGap = 250;
+        const obstacleSpeed = 3;
+        let frameCount = 0;
+
+        // Audio (placeholder)
+        let explosionSound = null;
+        try {
+            explosionSound = new Audio();
+            explosionSound.src = './assets/aag.mp3';
+        } catch (e) {
+            console.log('Audio not available');
+        }
+
+        // Flame Particle System
+        class Flame {
+            constructor(x, y, height) {
+                this.x = x;
+                this.y = y;
+                this.height = height;
+                this.particles = [];
+                this.generateParticles();
+            }
+
+            generateParticles() {
+                for (let i = 0; i < 20; i++) {
+                    this.particles.push({
+                        offsetX: Math.random() * obstacleWidth - obstacleWidth / 2,
+                        offsetY: Math.random() * this.height,
+                        size: Math.random() * 15 + 5,
+                        opacity: Math.random() * 0.5 + 0.5,
+                        speed: Math.random() * 2 + 1
+                    });
+                }
+            }
+
+            update() {
+                this.x -= obstacleSpeed;
+                this.particles.forEach(p => {
+                    p.offsetY -= p.speed;
+                    if (p.offsetY < 0) p.offsetY = this.height;
+                });
+            }
+
+            draw() {
+                this.particles.forEach(p => {
+                    const gradient = ctx.createRadialGradient(
+                        this.x + obstacleWidth / 2 + p.offsetX, 
+                        this.y + p.offsetY, 
+                        0,
+                        this.x + obstacleWidth / 2 + p.offsetX, 
+                        this.y + p.offsetY, 
+                        p.size
+                    );
+                    
+                    gradient.addColorStop(0, `rgba(255, 255, 100, ${p.opacity})`);
+                    gradient.addColorStop(0.3, `rgba(255, 150, 0, ${p.opacity * 0.8})`);
+                    gradient.addColorStop(0.7, `rgba(255, 50, 0, ${p.opacity * 0.5})`);
+                    gradient.addColorStop(1, 'rgba(139, 0, 0, 0)');
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(
+                        this.x + obstacleWidth / 2 + p.offsetX, 
+                        this.y + p.offsetY, 
+                        p.size, 
+                        0, 
+                        Math.PI * 2
+                    );
+                    ctx.fill();
+                });
+            }
+
+            collidesWith(player) {
+                // Check if player is horizontally aligned with the flame
+                const horizontalCollision = 
+                    player.x + player.radius > this.x &&
+                    player.x - player.radius < this.x + obstacleWidth;
+                
+                if (!horizontalCollision) return false;
+                
+                // For top flame: check if player is touching the flame area
+                if (this.y === 0) {
+                    return player.y - player.radius < this.height;
+                }
+                // For bottom flame: check if player is touching the flame area
+                else {
+                    return player.y + player.radius > this.y;
+                }
+            }
+        }
+
+        class Obstacle {
+            constructor() {
+                const minHeight = 100;
+                const maxHeight = canvas.height - obstacleGap - minHeight;
+                this.topHeight = Math.random() * (maxHeight - minHeight) + minHeight;
+                this.bottomHeight = canvas.height - this.topHeight - obstacleGap;
+                
+                this.topFlame = new Flame(canvas.width, 0, this.topHeight);
+                this.bottomFlame = new Flame(canvas.width, canvas.height - this.bottomHeight, this.bottomHeight);
+                
+                this.scored = false;
+            }
+
+            update() {
+                this.topFlame.update();
+                this.bottomFlame.update();
+            }
+
+            draw() {
+                this.topFlame.draw();
+                this.bottomFlame.draw();
+            }
+
+            collidesWith(player) {
+                return this.topFlame.collidesWith(player) || this.bottomFlame.collidesWith(player);
+            }
+
+            isOffScreen() {
+                return this.topFlame.x + obstacleWidth < 0;
+            }
+
+            isPassed(player) {
+                return !this.scored && this.topFlame.x + obstacleWidth < player.x - player.radius;
+            }
+        }
+
+        // Game Functions
+        function drawPlayer() {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            
+            ctx.drawImage(
+                player.image,
+                player.x - player.radius,
+                player.y - player.radius,
+                player.radius * 2,
+                player.radius * 2
+            );
+            
+            ctx.restore();
+            
+            ctx.strokeStyle = '#ff6b00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function updatePlayer() {
+            player.velocity += player.gravity;
+            player.y += player.velocity;
+
+            if (player.y + player.radius > canvas.height) {
+                player.y = canvas.height - player.radius;
+                player.velocity = 0;
+                triggerGameOver();
+            }
+
+            if (player.y - player.radius < 0) {
+                player.y = player.radius;
+                player.velocity = 0;
+            }
+        }
+
+        function jump() {
+            if (gameState === 'playing') {
+                player.velocity = player.jump;
+            }
+        }
+
+        function updateObstacles() {
+            if (frameCount % 90 === 0) {
+                obstacles.push(new Obstacle());
+            }
+
+            obstacles.forEach((obstacle, index) => {
+                obstacle.update();
+
+                if (obstacle.collidesWith(player)) {
+                    triggerCollisionEffect();
+                }
+
+                if (obstacle.isPassed(player)) {
+                    obstacle.scored = true;
+                    score++;
+                    document.getElementById('score').textContent = score;
+                }
+
+                if (obstacle.isOffScreen()) {
+                    obstacles.splice(index, 1);
+                }
+            });
+        }
+
+        function drawObstacles() {
+            obstacles.forEach(obstacle => obstacle.draw());
+        }
+
+        function triggerCollisionEffect() {
+            gameState = 'collision';
+            
+            const overlay = document.getElementById('collisionOverlay');
+            const collisionImg = document.getElementById('collisionImage');
+            collisionImg.src = player.image.src;
+            
+            overlay.style.display = 'flex';
+            
+            if (explosionSound) {
+                explosionSound.currentTime = 0;
+                explosionSound.play().catch(e => console.log('Audio play failed'));
+            }
+            
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                triggerGameOver();
+            }, 2000);
+        }
+
+        function triggerGameOver() {
+            gameState = 'gameOver';
+            document.getElementById('finalScore').textContent = `Score: ${score}`;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            cancelAnimationFrame(animationId);
+        }
+
+        function resetGame() {
+            player.y = canvas.height / 2;
+            player.velocity = 0;
+            obstacles = [];
+            score = 0;
+            frameCount = 0;
+            document.getElementById('score').textContent = '0';
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('collisionOverlay').style.display = 'none';
+        }
+
+        function startGame() {
+            resetGame();
+            gameState = 'playing';
+            document.getElementById('startScreen').style.display = 'none';
+            gameLoop();
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'playing') {
+                updatePlayer();
+                updateObstacles();
+                frameCount++;
+            }
+
+            drawPlayer();
+            drawObstacles();
+
+            if (gameState === 'playing') {
+                animationId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (gameState === 'start') {
+                    startGame();
+                } else {
+                    jump();
+                }
+            }
+        });
+
+        canvas.addEventListener('click', () => {
+            if (gameState === 'start') {
+                startGame();
+            } else {
+                jump();
+            }
+        });
+
+        // Initial draw
+        drawPlayer();
+    </script>
+</body>
+</html>
